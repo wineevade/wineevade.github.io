@@ -8,8 +8,6 @@
 <meta property="og:title" content="中秋快乐 · 阖家团圆">
 <meta property="og:description" content="点开这幅中秋团圆画卷，放一盏天灯，许一个心愿">
 <meta property="og:type" content="website">
-<meta property="og:image" content="https://wineevade.github.io/assets/hero.webp">
-<meta name="twitter:card" content="summary_large_image">
 <title>中秋快乐 · 阖家团圆</title>
 <style>
 :root{
@@ -283,7 +281,6 @@ body{
 </head>
 <body>
 
-<audio id="bgm" src="assets/music.mp3" loop preload="auto"></audio>
 <button class="music-btn" id="musicBtn" type="button" aria-label="播放/暂停背景音乐" aria-pressed="false">
   <svg class="moon-disc" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
     <circle cx="12" cy="12" r="9" fill="#f5d67b"/>
@@ -499,32 +496,73 @@ body{
     }
   }
 
-  /* ---------- 背景音乐 ---------- */
-  var bgm = document.getElementById("bgm");
+  /* ---------- 背景音乐（WebAudio：文本化音频 + 解码播放） ---------- */
   var musicBtn = document.getElementById("musicBtn");
-  if (bgm && musicBtn) {
-    bgm.volume = 0.75;
+  if (musicBtn) {
+    var MUSIC_URL = "assets/music.mp3"; /* 仓库内为 base64 文本 */
+    var audioCtx = null, audioBuf = null, audioSrc = null;
+    var musicOn = false, musicLoading = false;
     var setMusicState = function(playing){
       if (playing) { musicBtn.classList.add("playing"); } else { musicBtn.classList.remove("playing"); }
       musicBtn.setAttribute("aria-pressed", playing ? "true" : "false");
     };
-    var tryPlay = function(){
-      var p = bgm.play();
-      if (p && p.catch) { p.catch(function(){}); }
+    var ensureCtx = function(){
+      if (!audioCtx) {
+        var AC = window.AudioContext || window.webkitAudioContext;
+        if (!AC) return null;
+        try { audioCtx = new AC(); } catch (e) { return null; }
+      }
+      return audioCtx;
     };
-    bgm.addEventListener("play", function(){ setMusicState(true); });
-    bgm.addEventListener("pause", function(){ setMusicState(false); });
+    var loadMusic = function(cb){
+      if (audioBuf) { cb(true); return; }
+      if (musicLoading) { cb(false); return; }
+      musicLoading = true;
+      fetch(MUSIC_URL).then(function(r){ return r.text(); }).then(function(t){
+        var bin = atob(t.replace(/\s+/g, ""));
+        var bytes = new Uint8Array(bin.length);
+        for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+        var ctx = ensureCtx();
+        if (!ctx) { cb(false); return; }
+        ctx.decodeAudioData(bytes.buffer, function(buf){ audioBuf = buf; cb(true); }, function(){ cb(false); });
+      }).catch(function(){ cb(false); });
+    };
+    var startMusic = function(){
+      if (musicOn) return;
+      var ctx = ensureCtx();
+      if (!ctx) return;
+      if (ctx.state === "suspended") { ctx.resume(); }
+      loadMusic(function(ok){
+        if (!ok || musicOn) return;
+        try {
+          var src = ctx.createBufferSource();
+          src.buffer = audioBuf;
+          src.loop = true;
+          var gain = ctx.createGain();
+          gain.gain.value = 0.75;
+          src.connect(gain);
+          gain.connect(ctx.destination);
+          src.start(0);
+          audioSrc = src;
+          musicOn = true;
+          setMusicState(true);
+        } catch (e) {}
+      });
+    };
+    var stopMusic = function(){
+      if (audioSrc) { try { audioSrc.stop(0); } catch (e) {} audioSrc = null; }
+      musicOn = false;
+      setMusicState(false);
+    };
     musicBtn.addEventListener("click", function(e){
       e.stopPropagation();
-      if (bgm.paused) { tryPlay(); } else { bgm.pause(); }
+      if (musicOn) { stopMusic(); } else { startMusic(); }
     });
     /* 微信内置浏览器：桥就绪后尝试自动播放 */
-    document.addEventListener("WeixinJSBridgeReady", function(){
-      if (bgm.paused) { tryPlay(); }
-    });
+    document.addEventListener("WeixinJSBridgeReady", startMusic);
     /* 任意首次触摸页面时开始播放（移动端自动播放限制） */
     var firstTouch = function(){
-      if (bgm.paused) { tryPlay(); }
+      startMusic();
       document.removeEventListener("pointerdown", firstTouch);
     };
     document.addEventListener("pointerdown", firstTouch);
