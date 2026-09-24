@@ -7,6 +7,9 @@
 <meta name="description" content="月满中秋，阖家团圆 —— 一幅会动的中秋团圆画卷">
 <meta property="og:title" content="中秋快乐 · 阖家团圆">
 <meta property="og:description" content="点开这幅中秋团圆画卷，放一盏天灯，许一个心愿">
+<meta property="og:type" content="website">
+<meta property="og:image" content="https://wineevade.github.io/assets/hero.webp">
+<meta name="twitter:card" content="summary_large_image">
 <title>中秋快乐 · 阖家团圆</title>
 <style>
 :root{
@@ -27,6 +30,33 @@ body{
   touch-action:manipulation;
 }
 .kai{font-family:"STKaiti","KaiTi","STSong","SimSun",serif;}
+
+/* ---------- 音乐按钮 ---------- */
+.music-btn{
+  position:fixed;z-index:50;
+  top:calc(env(safe-area-inset-top,0px) + 14px);right:14px;
+  width:44px;height:44px;border-radius:50%;
+  border:1px solid rgba(245,214,123,.55);
+  background:rgba(11,16,38,.5);
+  backdrop-filter:blur(6px);
+  display:flex;align-items:center;justify-content:center;
+  cursor:pointer;padding:0;
+  box-shadow:0 4px 16px rgba(0,0,0,.35);
+}
+.music-btn svg{display:block;}
+.music-btn::after{
+  content:"";position:absolute;inset:-4px;border-radius:50%;
+  border:1px solid rgba(245,214,123,.35);
+  animation:pulseRing 2.2s ease-out infinite;
+}
+.music-btn.playing::after{animation:none;opacity:0;}
+.music-btn.playing .moon-disc{animation:spin 7s linear infinite;}
+@keyframes pulseRing{0%{transform:scale(.85);opacity:.9}70%{transform:scale(1.25);opacity:0}100%{opacity:0}}
+@keyframes spin{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){
+  .music-btn::after{animation:none;opacity:0;}
+  .music-btn.playing .moon-disc{animation:none;}
+}
 
 /* ---------- Hero ---------- */
 .hero{
@@ -239,6 +269,7 @@ body{
 }
 .footer .year{margin-top:12px;font-size:12px;color:rgba(246,236,211,.45);letter-spacing:.22em;}
 .footer .share{margin-top:16px;font-size:12px;color:rgba(246,236,211,.6);letter-spacing:.12em;}
+.footer .credit{margin-top:10px;font-size:10px;color:rgba(246,236,211,.32);letter-spacing:.06em;}
 
 @media (prefers-reduced-motion:reduce){
   .hero-bg{animation:none;}
@@ -251,6 +282,16 @@ body{
 </style>
 </head>
 <body>
+
+<audio id="bgm" src="assets/music.mp3" loop preload="auto"></audio>
+<button class="music-btn" id="musicBtn" type="button" aria-label="播放/暂停背景音乐" aria-pressed="false">
+  <svg class="moon-disc" width="22" height="22" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+    <circle cx="12" cy="12" r="9" fill="#f5d67b"/>
+    <circle cx="9.5" cy="9.5" r="1.6" fill="#e8b64c"/>
+    <circle cx="14.5" cy="14" r="1.1" fill="#e8b64c"/>
+    <circle cx="10.5" cy="15.5" r="0.8" fill="#e8b64c"/>
+  </svg>
+</button>
 
 <!-- 首屏：团圆画卷 -->
 <header class="hero" id="top">
@@ -306,6 +347,7 @@ body{
   <p class="seal kai">花好月圆人团圆</p>
   <p class="year">MID-AUTUMN FESTIVAL · 中秋佳节</p>
   <p class="share">长按右上角，把这份团圆分享给家人吧</p>
+  <p class="credit">背景音乐《Eastminster》 · Kevin MacLeod（incompetech.com，CC BY 4.0）</p>
 </footer>
 
 <script>
@@ -455,6 +497,37 @@ body{
         if (wrap.parentNode) wrap.parentNode.removeChild(wrap);
       });
     }
+  }
+
+  /* ---------- 背景音乐 ---------- */
+  var bgm = document.getElementById("bgm");
+  var musicBtn = document.getElementById("musicBtn");
+  if (bgm && musicBtn) {
+    bgm.volume = 0.75;
+    var setMusicState = function(playing){
+      if (playing) { musicBtn.classList.add("playing"); } else { musicBtn.classList.remove("playing"); }
+      musicBtn.setAttribute("aria-pressed", playing ? "true" : "false");
+    };
+    var tryPlay = function(){
+      var p = bgm.play();
+      if (p && p.catch) { p.catch(function(){}); }
+    };
+    bgm.addEventListener("play", function(){ setMusicState(true); });
+    bgm.addEventListener("pause", function(){ setMusicState(false); });
+    musicBtn.addEventListener("click", function(e){
+      e.stopPropagation();
+      if (bgm.paused) { tryPlay(); } else { bgm.pause(); }
+    });
+    /* 微信内置浏览器：桥就绪后尝试自动播放 */
+    document.addEventListener("WeixinJSBridgeReady", function(){
+      if (bgm.paused) { tryPlay(); }
+    });
+    /* 任意首次触摸页面时开始播放（移动端自动播放限制） */
+    var firstTouch = function(){
+      if (bgm.paused) { tryPlay(); }
+      document.removeEventListener("pointerdown", firstTouch);
+    };
+    document.addEventListener("pointerdown", firstTouch);
   }
 
   if (btn) btn.addEventListener("click", launch);
